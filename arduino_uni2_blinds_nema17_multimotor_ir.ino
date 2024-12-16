@@ -5,13 +5,16 @@
 
 #include <EEPROM.h>
 
-bool debugConsole = false;
+bool debugConsole = true;
 
 // количество шагов за 1 нажатие кнопки
 byte stepsPerClick = 112;
 
 // 0 - все моторы
 byte activeMotor = 0;
+
+// 1 общий enable pin для всех моторов
+byte enablePin = 2;
 
 // флаг движение без остановки или по шагам
 bool moveBySteps = true;
@@ -30,11 +33,11 @@ const byte motorAmount = 5;
 // также понадобятся: верхняя позиция по-умолчанию defaultTopPosition
 // большая штора верхнее положение 75000 на 2-х контактах делителя на схеме
 long motorsParams[motorAmount][8] = {
-  {16, 17, 18, 0, 1, 700, 10, 8000},
+  {16, 17, 2, 0, 1, 700, 10, 8000},
   {4, 3, 2, 0, 1, 700, 10, 8000},
-  {7, 6, 5, 0, 1, 700, 10, 8000},
-  {10, 9, 8, 0, 1, 700, 10, 8000},
-  {13, 12, 11, 0, 1, 700, 10, 8000},
+  {7, 6, 2, 0, 1, 700, 10, 8000},
+  {10, 9, 2, 0, 1, 700, 10, 8000},
+  {13, 12, 2, 0, 1, 700, 10, 8000},
 };
 
 AccelStepper motors[] = { 
@@ -132,13 +135,20 @@ void setup() {
 
   //отключаем питание на двигателях изначально
   // перебираем все классы и устанавливаем для каждого двигателя enabledPin в HIGH
+
+  // устанавливаем общий для всех enable pin в HIGH, т.е. движки отключены
+  pinMode(enablePin, OUTPUT);
+  digitalWrite(enablePin, HIGH);
+
   // Устанавливаем максимальную скорость, коэффициент ускорения,
   // начальную скорость 
   // для каждого двигателя
   for (int i = 0; i < motorAmount; i++) {
+    /*
     // устанавливаем enabledPin в HIGH)
     // у всех движков 
     digitalWrite(motorsParams[i][2], HIGH);
+    */
 
     // устанавливаем скорость и макс.скорость
     // setSpeed(direction 1\-1 * motorSpeed)
@@ -450,6 +460,7 @@ void setDirection(int direction) {
 // двигаем все моторы, на которых есть питание
 // ВОТ ТУТ ПРОВЕРИТЬ ИЗМЕНЯЕТСЯ ЛИ ПОЗИЦИЯ, ЕСЛИ МОТОР ОБЕСТОЧЕН, НО ОДИН ХУЙ ЕГО ДЕРГАЮТ motor.run();
 void moveMotor() {
+
   // перебираем все моторы, проверяем, если активны, то крутим
   for (int i = 0; i < motorAmount; i++) {
     if(motorsParams[i][3] == 1) {
@@ -457,6 +468,9 @@ void moveMotor() {
 
       //if(( ((motors[i].currentPosition() > 0 && motorsParams[i][4] == -1 ) || (motors[i].currentPosition() <= motorsParams[i][7] && motorsParams[i][4] == 1 )) && !moveBySteps ) || (moveBySteps && motors[i].distanceToGo() != 0 )) {
       if( motors[i].distanceToGo() != 0 ) {
+        // активируем все моторы общим enable pin
+        digitalWrite(enablePin, LOW);
+
         motors[i].run();
 
         // сохраняем время последнего движения
@@ -494,7 +508,7 @@ void stopMotor(int motorNum) {
       */
 
       motorsParams[i][3] = 0;
-      digitalWrite(motorsParams[i][2], HIGH);
+      //digitalWrite(motorsParams[i][2], HIGH);
     }
   }
 }
@@ -551,6 +565,8 @@ void saveCurrentPositions() {
     // записываем значение в EEPROM
     EEPROM.put(0, currentPositions);
 
+    // обесточиваем все моторы общим enable pin = HIGH
+    digitalWrite(enablePin, HIGH);
   }
 
   /*
